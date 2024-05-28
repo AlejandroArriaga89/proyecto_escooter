@@ -93,7 +93,6 @@ const ReportPage = () => {
       },
     ],
   };
-  // console.log(productData);
 
   return (
     <Container>

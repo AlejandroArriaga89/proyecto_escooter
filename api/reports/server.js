@@ -3,7 +3,7 @@ const mongoose = require("mongoose");
 const cors = require("cors");
 
 const app = express();
-const port = 8000; // Cambia a 8000
+const port = 8000;
 
 app.use(cors());
 app.use(express.json());
@@ -18,14 +18,21 @@ mongoose
     console.error("Error connecting to MongoDB:", error);
   });
 
-const Compra = mongoose.model("compra", {});
-const Cliente = mongoose.model("cliente", {});
+const Compras = mongoose.model(
+  "compras",
+  new mongoose.Schema({
+    fecha: Date,
+    total: Number,
+    productos: Object,
+  })
+);
+const Cliente = mongoose.model("cliente", new mongoose.Schema({}));
 
 // Rutas de API
 app.get("/api/clientData", async (req, res) => {
   try {
     const totalClients = await Cliente.countDocuments();
-    const totalOrders = await Compra.countDocuments();
+    const totalOrders = await Compras.countDocuments();
     const totalProducts = await getTotalProducts();
 
     res.json({
@@ -41,25 +48,34 @@ app.get("/api/clientData", async (req, res) => {
 
 app.get("/api/salesData", async (req, res) => {
   try {
+    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const yearAgo = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000);
+
+    console.log("sevenDaysAgo:", sevenDaysAgo);
+    console.log("thirtyDaysAgo:", thirtyDaysAgo);
+    console.log("yearAgo:", yearAgo);
+
     const weeklySales = (
-      await Compra.find({
-        fecha: { $gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) },
-      })
-    ).reduce((acc, compra) => acc + compra.total, 0);
+      await Compras.find({ fecha: { $gte: sevenDaysAgo } })
+    ).reduce((acc, compra) => {
+      console.log("Weekly Sale:", compra);
+      return acc + compra.total;
+    }, 0);
 
     const monthlySales = (
-      await Compra.find({
-        fecha: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
-      })
-    ).reduce((acc, compra) => acc + compra.total, 0);
+      await Compras.find({ fecha: { $gte: thirtyDaysAgo } })
+    ).reduce((acc, compra) => {
+      console.log("Monthly Sale:", compra);
+      return acc + compra.total;
+    }, 0);
 
     const yearlySales = (
-      await Compra.find({
-        fecha: { $gte: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000) },
-      })
-    ).reduce((acc, compra) => acc + compra.total, 0);
-
-    console.log(res.json.length);
+      await Compras.find({ fecha: { $gte: yearAgo } })
+    ).reduce((acc, compra) => {
+      console.log("Yearly Sale:", compra);
+      return acc + compra.total;
+    }, 0);
 
     res.json({
       weekly: weeklySales,
@@ -75,16 +91,19 @@ app.get("/api/salesData", async (req, res) => {
 // Función para obtener el total de productos desde la base de datos
 async function getTotalProducts() {
   try {
-    const totalProducts = await Compra.aggregate([
+    const totalProducts = await Compras.aggregate([
       {
         $project: {
-          numberOfProducts: { $size: { $objectToArray: "$productos" } },
+          productsArray: { $objectToArray: "$productos" },
         },
+      },
+      {
+        $unwind: "$productsArray",
       },
       {
         $group: {
           _id: null,
-          totalProducts: { $sum: "$numberOfProducts" },
+          totalProducts: { $sum: 1 },
         },
       },
     ]);
